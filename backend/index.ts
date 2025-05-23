@@ -1,41 +1,36 @@
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import express from 'express';
 import cors from 'cors';
 import http from 'http';
 import { Server } from 'socket.io';
-import jwt from 'jsonwebtoken'; 
+import * as serviceAccount from './chatsocket-1cd90-firebase-adminsdk-fbsvc-aa960d68da.json';
 
-import authRouter from './routes/auth';
-import { authenticateToken } from './middleware/auth';
 
+initializeApp({
+  credential: cert(serviceAccount as any),
+});
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-  },
-});
+const io = new Server(server, { cors: { origin: '*' } });
 
 app.use(cors());
 app.use(express.json());
 
-app.use('/auth', authRouter);
-
-app.get('/profile', authenticateToken, (req, res) => {
-  res.json({ user: req.user });
-});
-
-// Simples armazenamento de usuários online (em memória)
 const onlineUsers = new Set<string>();
 
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   const token = socket.handshake.auth.token;
-  if (!token) return next(new Error('Token missing'));
+  if (!token) return next(new Error('No token'));
 
-  jwt.verify(token, 'secreta', (err: jwt.VerifyErrors | null, decoded: string | jwt.JwtPayload | undefined) => {
-    if (err) return next(new Error('Invalid token'));
-    (socket as any).username = (decoded as any).username;
+  try {
+    const decoded = await getAuth().verifyIdToken(token);
+    (socket as any).username = decoded.email;
     next();
-  });
+  } catch (err) {
+    console.error('Token error', err);
+    next(new Error('Invalid token'));
+  }
 });
 
 io.on('connection', (socket) => {
@@ -45,7 +40,6 @@ io.on('connection', (socket) => {
   io.emit('userOnline', Array.from(onlineUsers));
 
   socket.on('message', (msg) => {
-    // reenvia para todos os clients
     io.emit('message', { username, msg });
   });
 
@@ -55,7 +49,6 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = 3000;
-server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+server.listen(3000, () => {
+  console.log('Server running on http://localhost:3000');
 });

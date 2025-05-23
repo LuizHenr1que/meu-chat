@@ -1,0 +1,4 @@
+# Ignorar arquivo de credenciais Firebase
+chat socket-1cd90-firebase-adminsdk-fbsvc-aa960d68da.json
+
+*.json
