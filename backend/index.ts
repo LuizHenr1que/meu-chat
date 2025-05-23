@@ -1,15 +1,18 @@
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
 import express from 'express';
 import cors from 'cors';
 import http from 'http';
 import { Server } from 'socket.io';
 import * as serviceAccount from './chatsocket-1cd90-firebase-adminsdk-fbsvc-aa960d68da.json';
 
-
 initializeApp({
   credential: cert(serviceAccount as any),
 });
+
+const db = getFirestore();
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
@@ -39,8 +42,19 @@ io.on('connection', (socket) => {
 
   io.emit('userOnline', Array.from(onlineUsers));
 
-  socket.on('message', (msg) => {
-    io.emit('message', { username, msg });
+  socket.on('message', async (msg) => {
+    const messageData = {
+      username,
+      msg,
+      timestamp: new Date()
+    };
+
+    try {
+      await db.collection('messages').add(messageData);
+      io.emit('message', messageData);
+    } catch (err) {
+      console.error('Erro ao salvar mensagem no Firestore:', err);
+    }
   });
 
   socket.on('disconnect', () => {

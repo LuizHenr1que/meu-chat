@@ -3,6 +3,9 @@ import { auth } from '../../firebase';
 import { signOut } from 'firebase/auth';
 import io, { Socket } from 'socket.io-client';
 
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { db } from '../../firebase';
+
 import ChatWindow from '../../components/ChatComponent/ChatWindow';
 import MessageInput from '../../components/ChatComponent/MessageInput';
 import ChatActions from '../../components/ChatComponent/ChatActions';
@@ -10,6 +13,7 @@ import ChatActions from '../../components/ChatComponent/ChatActions';
 interface Message {
   username: string;
   msg: string;
+  timestamp?: Date | number;
 }
 
 interface ChatPageProps {
@@ -24,29 +28,40 @@ export default function ChatPage({ token, onLogout }: ChatPageProps) {
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
 
   useEffect(() => {
-    if (token) {
-      const newSocket = io('http://localhost:3000', {
-        auth: { token }
-      });
+    if (!token) return;
 
-      newSocket.on('connect', () => {
-        console.log('Connected to socket');
-      });
+    // Consulta Firestore para mensagens ordenadas
+    const q = query(collection(db, 'messages'), orderBy('timestamp', 'asc'));
 
-      newSocket.on('message', (msg: Message) => {
-        setMessages(prev => [...prev, msg]);
-      });
+    // Escuta mensagens do Firestore
+    const unsubscribeFirestore = onSnapshot(q, (snapshot) => {
+      const msgs: Message[] = snapshot.docs.map(doc => doc.data() as Message);
+      setMessages(msgs);
+    });
 
-      newSocket.on('userOnline', (users: string[]) => {
-        setOnlineUsers(users);
-      });
+    // Conectar socket.io
+    const newSocket = io('http://localhost:3000', {
+      auth: { token }
+    });
 
-      setSocket(newSocket);
+    newSocket.on('connect', () => {
+      console.log('Connected to socket');
+    });
 
-      return () => {
-        newSocket.disconnect();
-      };
-    }
+    newSocket.on('message', (msg: Message) => {
+      setMessages(prev => [...prev, msg]);
+    });
+
+    newSocket.on('userOnline', (users: string[]) => {
+      setOnlineUsers(users);
+    });
+
+    setSocket(newSocket);
+
+    return () => {
+      unsubscribeFirestore();
+      newSocket.disconnect();
+    };
   }, [token]);
 
   const sendMessage = () => {
@@ -77,21 +92,21 @@ export default function ChatPage({ token, onLogout }: ChatPageProps) {
       <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl p-8 space-y-6">
         <h2 className="text-4xl font-extrabold text-green-700 text-center">Chat</h2>
 
-      <ChatWindow 
-        messages={messages} 
-        onlineUsers={onlineUsers} 
-        currentUser={auth.currentUser?.displayName || 'me'} 
-      />
-
-        <MessageInput 
-          message={message} 
-          setMessage={setMessage} 
-          sendMessage={sendMessage} 
+        <ChatWindow
+          messages={messages}
+          onlineUsers={onlineUsers}
+          currentUser={auth.currentUser?.displayName || 'me'}
         />
 
-        <ChatActions 
-          logout={logout} 
-          sendMessage={sendMessage} 
+        <MessageInput
+          message={message}
+          setMessage={setMessage}
+          sendMessage={sendMessage}
+        />
+
+        <ChatActions
+          logout={logout}
+          sendMessage={sendMessage}
         />
       </div>
     </div>
