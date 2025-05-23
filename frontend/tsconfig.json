@@ -5,3 +5,15 @@
     { "path": "./tsconfig.node.json" }
   ]
 }
+
+// {
+//   "compilerOptions": {
+//     "target": "ESNext",
+//     "lib": ["DOM", "DOM.Iterable", "ESNext"],
+//     "module": "ESNext",
+//     "moduleResolution": "Node",
+//     "strict": true,
+//     "jsx": "react-jsx"
+//   },
+//   "include": ["src"]
+// }
